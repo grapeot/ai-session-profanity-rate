@@ -13,6 +13,22 @@ uv pip install --python .venv/bin/python -e '.[dev]'
 
 也可以把本仓库 URL 交给 Codex、Claude Code、Cursor、OpenCode 或其他 coding agent，请它先阅读 `skills/ai_session_profanity_rate.md`，再按目标 workspace 的 `AGENTS.md` / `CLAUDE.md` 和 skill index 规则安装 root skill。
 
+如果目标机器没有本工具直接支持的原始 session store，先用 [AI Session Export](https://github.com/grapeot/ai_session_export) 把 OpenCode、Claude Code、Codex、Antigravity 或 Second Mind 会话导出成统一 Markdown，再让本工具读取 archive：
+
+```bash
+# 在 ai_session_export 仓库中导出最近会话
+python export_sessions.py --since-date 2026-07-01
+
+# 在本仓库中分析统一 Markdown archive
+ai-session-profanity-rate prepare \
+  --source archive \
+  --archive-dir ~/.local/share/ai-session-export \
+  --timezone America/Los_Angeles \
+  --classifier-profile <approved-classifier-profile>
+```
+
+`--timezone` 必须与生成 archive 的机器时区一致。Markdown contract 只有 session date 和每条消息的本地 `HH:MM`，本工具会按消息顺序处理跨午夜 rollover，但无法恢复逐条模型归因，因此 archive 模式的 model family 记为 `Unknown`。不要把同一批会话的原始 store 和 archive 同时作为输入，否则会重复计数。
+
 ## CLI
 
 ```bash
@@ -36,7 +52,7 @@ ai-session-profanity-rate visualize --input <run-directory>/results.json
 ai-session-profanity-rate cache-stats
 ```
 
-`prepare` 支持 `--source opencode,claude_code,codex,antigravity`、`--as-of RFC3339`、`--batch-size`、`--batch-max-bytes`、`--classifier-profile`、`--refresh` 和各数据源路径覆盖参数。
+`prepare` 支持 `--source opencode,claude_code,codex,antigravity,archive`、`--as-of RFC3339`、`--batch-size`、`--batch-max-bytes`、`--classifier-profile`、`--refresh` 和各数据源路径覆盖参数。`archive` 不是默认 source，避免与本机原始 store 重复计数。
 
 在 OpenCode 中，推荐把 batch 交给显式绑定 `ollama-cloud/glm-5.2` 的 `ollama_glm_5_2` sub-agent。不要用名称相近的 `glm` 代替，因为它可能绑定 Z.ai provider。OpenCode 只在启动时加载 agent 配置，新增 agent 后要重启一次。
 

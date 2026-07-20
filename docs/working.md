@@ -4,6 +4,9 @@
 
 ### 2026-07-20
 
+- Added an `archive` source for the stable Markdown contract produced by `ai_session_export`, giving users without directly supported raw stores an explicit export-then-analyze path.
+- Archive ingestion preserves the original source/session identity, reconstructs local minute timestamps with midnight rollover, and deliberately leaves per-message model attribution `Unknown` because the archive only exposes session-level `models_used`.
+- Linked AI Session Export from the README and root skill, documented timezone requirements, and warned against combining native and archive inputs for the same sessions.
 - 定义 `profanity.v2`，统计独立粗口词元数；把一般骂人、负面评价、引用和元讨论排除在外。
 - 同时输出含粗口消息占比和每 100 条消息的粗口词元数，保留强度信息。
 - 将 OpenCode 推荐 worker 固定为 `ollama_glm_5_2`，显式区分 Ollama Cloud 与 Z.ai 的 GLM-5.2 路由。
@@ -20,5 +23,5 @@
 ## Lessons Learned
 
 - Session-level `models_used` 不能可靠归因到单条 user message；优先读取原始 message model，缺失时记录 attribution，不能猜。
-- Markdown archive 只保留 session date 和消息时分，不适合跨日逐消息统计；分析应从原始 store 提取。
+- 原始 store 仍是精确时间与逐消息模型归因的首选。Markdown archive 可作为 portable fallback，但调用者必须提供导出机器的时区；跨午夜只能按 turn 顺序推断，模型归因保持 `Unknown`。
 - 单纯 bitstring 会在漏项或重排时静默错位；response 必须带 `item_id` 并做集合全等校验。
