@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 
 from .cache import LabelCache
 from .chart import render_chart
-from .extractors import extract_antigravity, extract_claude, extract_codex, extract_opencode, parse_timestamp
+from .extractors import extract_antigravity, extract_archive, extract_claude, extract_codex, extract_opencode, parse_timestamp
 from .pipeline import ingest_run, prepare_run
 
 
@@ -52,6 +52,7 @@ def build_parser() -> argparse.ArgumentParser:
     prepare.add_argument("--claude-dir", type=Path, action="append")
     prepare.add_argument("--codex-dir", type=Path, action="append")
     prepare.add_argument("--antigravity-dir", type=Path, default=Path.home() / ".gemini" / "antigravity-ide" / "brain")
+    prepare.add_argument("--archive-dir", type=Path, default=Path.home() / ".local" / "share" / "ai-session-export")
 
     ingest = subparsers.add_parser("ingest", help="validate labels, update cache, and emit JSON")
     ingest.add_argument("--run-dir", type=Path, required=True)
@@ -95,7 +96,10 @@ def command_prepare(args: argparse.Namespace, cache: LabelCache) -> int:
     if "antigravity" in sources:
         source_status["antigravity"] = "available" if args.antigravity_dir.expanduser().is_dir() else "missing"
         add("antigravity", extract_antigravity(args.antigravity_dir.expanduser(), start, as_of, tz))
-    unknown = sources - {"opencode", "claude_code", "codex", "antigravity"}
+    if "archive" in sources:
+        source_status["archive"] = "available" if args.archive_dir.expanduser().is_dir() else "missing"
+        add("archive", extract_archive(args.archive_dir.expanduser(), start, as_of, tz))
+    unknown = sources - {"opencode", "claude_code", "codex", "antigravity", "archive"}
     if unknown:
         raise ValueError(f"unsupported sources: {', '.join(sorted(unknown))}")
 

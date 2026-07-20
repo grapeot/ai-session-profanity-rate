@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
-from datetime import datetime, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable
 from zoneinfo import ZoneInfo
@@ -12,6 +12,7 @@ from .models import MessageRecord
 
 SYSTEM_REMINDER_RE = re.compile(r"<system-reminder>.*?</system-reminder>", re.DOTALL | re.IGNORECASE)
 USER_REQUEST_RE = re.compile(r"<USER_REQUEST>(.*?)</USER_REQUEST>", re.DOTALL)
+ARCHIVE_HEADING_RE = re.compile(r"^## (User|Assistant)(?: \[(\d{2}):(\d{2})\])?\s*$")
 
 
 def parse_timestamp(value: str) -> datetime | None:
@@ -284,6 +285,89 @@ def extract_antigravity(brain_dir: Path, start: datetime, end: datetime, tz: Zon
                 provider=None,
                 model=None,
                 attribution="unknown",
+            )
+            if record:
+                output.append(record)
+    return output
+
+
+def _frontmatter_value(lines: list[str], key: str) -> str | None:
+    prefix = f"{key}:"
+    for line in lines:
+        if not line.startswith(prefix):
+            continue
+        value = line[len(prefix) :].strip()
+        if value.startswith('"'):
+            try:
+                decoded = json.loads(value)
+            except json.JSONDecodeError:
+                return None
+            return decoded if isinstance(decoded, str) else None
+        return value or None
+    return None
+
+
+def extract_archive(archive_dir: Path, start: datetime, end: datetime, tz: ZoneInfo) -> list[MessageRecord]:
+    """Read the stable Markdown contract produced by AI Session Export.
+
+    The archive stores local HH:MM values rather than full per-turn timestamps,
+    so callers must pass the timezone used on the exporting machine. A decrease
+    in turn time advances the inferred date for sessions crossing midnight.
+    """
+    if not archive_dir.is_dir():
+        return []
+    output: list[MessageRecord] = []
+    for path in sorted(archive_dir.rglob("*.md")):
+        lines = path.read_text(encoding="utf-8").splitlines()
+        if not lines or lines[0] != "---":
+            continue
+        try:
+            frontmatter_end = lines.index("---", 1)
+        except ValueError:
+            continue
+        frontmatter = lines[1:frontmatter_end]
+        source = _frontmatter_value(frontmatter, "source")
+        session_id = _frontmatter_value(frontmatter, "session_id")
+        session_date_text = _frontmatter_value(frontmatter, "date")
+        if not source or not session_id or not session_date_text:
+            continue
+        try:
+            current_date = date.fromisoformat(session_date_text)
+        except ValueError:
+            continue
+
+        headings: list[tuple[int, str, time | None, date]] = []
+        previous_time: time | None = None
+        for index, line in enumerate(lines[frontmatter_end + 1 :], start=frontmatter_end + 1):
+            match = ARCHIVE_HEADING_RE.fullmatch(line)
+            if not match:
+                continue
+            turn_time = time(int(match.group(2)), int(match.group(3))) if match.group(2) else None
+            if turn_time is not None and previous_time is not None and turn_time < previous_time:
+                current_date += timedelta(days=1)
+            if turn_time is not None:
+                previous_time = turn_time
+            headings.append((index, match.group(1), turn_time, current_date))
+
+        for turn_index, (line_index, role, turn_time, turn_date) in enumerate(headings):
+            if role != "User":
+                continue
+            content_end = headings[turn_index + 1][0] if turn_index + 1 < len(headings) else len(lines)
+            text = "\n".join(lines[line_index + 1 : content_end]).strip()
+            local_timestamp = datetime.combine(turn_date, turn_time or time.min, tzinfo=tz)
+            timestamp = local_timestamp.astimezone(timezone.utc)
+            if not (start <= timestamp <= end):
+                continue
+            record = _record(
+                source=source,
+                session_id=session_id,
+                message_id=f"archive-{turn_index + 1}",
+                timestamp=timestamp,
+                tz=tz,
+                text=text,
+                provider=None,
+                model=None,
+                attribution="archive_unavailable",
             )
             if record:
                 output.append(record)

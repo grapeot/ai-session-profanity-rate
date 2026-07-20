@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo
 from ai_session_profanity_rate.extractors import (
     clean_user_text,
     extract_antigravity,
+    extract_archive,
     extract_claude,
     extract_codex,
     extract_opencode,
@@ -122,3 +123,45 @@ def test_extract_antigravity_keeps_explicit_request_only(tmp_path: Path) -> None
     assert len(records) == 1
     assert records[0].text == "synthetic"
     assert records[0].model_family == "Unknown"
+
+
+def test_extract_ai_session_export_archive_and_midnight_rollover(tmp_path: Path) -> None:
+    archive = tmp_path / "archive" / "opencode" / "session.md"
+    archive.parent.mkdir(parents=True)
+    archive.write_text(
+        """---
+source: opencode
+session_id: "session-1"
+title: "Synthetic session"
+date: "2026-07-19"
+message_count: 4
+models_used: ["gpt-example"]
+---
+# Synthetic session
+
+## User [23:59]
+
+first synthetic message
+
+## Assistant [23:59]
+
+reply
+
+## User [00:01]
+
+second synthetic message
+
+## Assistant [00:02]
+
+reply
+""",
+        encoding="utf-8",
+    )
+
+    records = extract_archive(tmp_path / "archive", START, END, TZ)
+
+    assert [record.text for record in records] == ["first synthetic message", "second synthetic message"]
+    assert [record.local_date for record in records] == ["2026-07-19", "2026-07-20"]
+    assert all(record.source == "opencode" for record in records)
+    assert all(record.model_family == "Unknown" for record in records)
+    assert all(record.model_attribution == "archive_unavailable" for record in records)

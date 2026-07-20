@@ -16,13 +16,25 @@ This skill counts independent profanity units; it does not measure general insul
 ## Required Context
 
 - Repository root containing the installed `ai-session-profanity-rate` CLI.
-- Local session stores for one or more supported sources: OpenCode, Claude Code, Codex, Antigravity.
+- Either local session stores for OpenCode, Claude Code, Codex, or Antigravity, or a unified Markdown archive produced by [AI Session Export](https://github.com/grapeot/ai_session_export).
 - A user-approved sub-agent runtime. Batch files contain private message text.
 - A private output directory outside any public repository.
 
 ## Workflow Contract
 
 Run `prepare` for the requested window. It prints a run directory and creates `requests/batch-*.json` only for cache misses. Do not print or summarize request text in chat.
+
+Prefer native stores when available because they preserve exact timestamps and stronger per-message model attribution. For portability, first run AI Session Export and then select only the archive input:
+
+```bash
+ai-session-profanity-rate prepare \
+  --source archive \
+  --archive-dir ~/.local/share/ai-session-export \
+  --timezone <timezone-used-by-exporting-machine> \
+  --classifier-profile <approved-classifier-profile>
+```
+
+Do not combine an archive with its corresponding native stores in one run; that counts the same messages twice. The Markdown contract stores session date plus local `HH:MM`, so archive mode infers midnight rollover from turn order and reports model attribution as `archive_unavailable` / `Unknown` rather than guessing from session-level `models_used`.
 
 Use the registered `ollama_glm_5_2` sub-agent as the default high-throughput classifier when it is available. It is explicitly bound to `ollama-cloud/glm-5.2`; do not substitute the separate `glm` agent, which may use a different provider. Record the exact worker route in `--classifier-profile` so a provider or model change invalidates the classification cache.
 
