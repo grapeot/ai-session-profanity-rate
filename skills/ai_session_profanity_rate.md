@@ -42,7 +42,7 @@ Dispatch workers in parallel when several batches exist. A worker may process se
 
 The host should enforce least privilege: no shell, network, nested-agent, secret, or unrelated filesystem access for classifier workers. Prompt instructions alone do not neutralize prompt injection. If the runtime cannot enforce a narrow read/write sandbox around assigned request and response files, treat that as a disclosed residual risk and do not process messages from untrusted authors.
 
-Run `ingest` only after all response files exist. It rejects any response whose batch ID, versions, item set, or non-negative integer counts do not match exactly. Then run `visualize` on `results.json`.
+Run `ingest` only after all response files exist. It rejects any response whose batch ID, versions, item set, or non-negative integer counts do not match exactly. Then run `visualize` on `results.json`. After the PNG is generated, use the client image-read action on `profanity_rate.png` so the chart is attached and visible to the user; printing its path alone does not trigger client display.
 
 ```bash
 ai-session-profanity-rate prepare \
