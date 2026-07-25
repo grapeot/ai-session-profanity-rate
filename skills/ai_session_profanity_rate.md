@@ -34,7 +34,7 @@ ai-session-profanity-rate prepare \
   --classifier-profile <approved-classifier-profile>
 ```
 
-Do not combine an archive with its corresponding native stores in one run; that counts the same messages twice. The Markdown contract stores session date plus local `HH:MM`, so archive mode infers midnight rollover from turn order and reports model attribution as `archive_unavailable` / `Unknown` rather than guessing from session-level `models_used`.
+Do not combine an archive with its corresponding native stores in one run; that counts the same messages twice. The Markdown contract stores session date plus local `HH:MM`, so archive mode infers midnight rollover from turn order. New archives may include an index-aligned `turn_models` array for per-turn attribution. Old archives and sources without turn models remain `archive_unavailable` / `Unknown`; never guess from session-level `models_used`.
 
 Use the registered `ollama_glm_5_2` sub-agent as the default high-throughput classifier when it is available. It is explicitly bound to `ollama-cloud/glm-5.2`; do not substitute the separate `glm` agent, which may use a different provider. Record the exact worker route in `--classifier-profile` so a provider or model change invalidates the classification cache.
 

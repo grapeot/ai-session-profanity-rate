@@ -2,6 +2,11 @@
 
 ## Changelog
 
+### 2026-07-25
+
+- Deduplicated identical archive messages by stable item ID and reject conflicting duplicates instead of silently double-counting them. Exact message text and boundaries are unchanged, so existing labels remain valid.
+- Added strict consumption of the AI Session Export `turn_models` contract, restoring per-user-turn model families for new archives while retaining `Unknown` for legacy archives and sources without model identity.
+
 ### 2026-07-20
 
 - Added an `archive` source for the stable Markdown contract produced by `ai_session_export`, giving users without directly supported raw stores an explicit export-then-analyze path.
@@ -23,5 +28,5 @@
 ## Lessons Learned
 
 - Session-level `models_used` 不能可靠归因到单条 user message；优先读取原始 message model，缺失时记录 attribution，不能猜。
-- 原始 store 仍是精确时间与逐消息模型归因的首选。Markdown archive 可作为 portable fallback，但调用者必须提供导出机器的时区；跨午夜只能按 turn 顺序推断，模型归因保持 `Unknown`。
+- 原始 store 仍是精确时间与逐消息模型归因的首选。Markdown archive 可作为 portable input，但调用者必须提供导出机器的时区；跨午夜按 turn 顺序推断，模型归因只接受 index-aligned `turn_models`，缺失时保持 `Unknown`。
 - 单纯 bitstring 会在漏项或重排时静默错位；response 必须带 `item_id` 并做集合全等校验。

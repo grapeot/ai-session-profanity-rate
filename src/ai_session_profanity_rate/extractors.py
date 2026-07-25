@@ -329,12 +329,29 @@ def extract_archive(archive_dir: Path, start: datetime, end: datetime, tz: ZoneI
         source = _frontmatter_value(frontmatter, "source")
         session_id = _frontmatter_value(frontmatter, "session_id")
         session_date_text = _frontmatter_value(frontmatter, "date")
+        turn_models_present = any(line.startswith("turn_models:") for line in frontmatter)
+        turn_models_text = _frontmatter_value(frontmatter, "turn_models")
         if not source or not session_id or not session_date_text:
             continue
         try:
             current_date = date.fromisoformat(session_date_text)
         except ValueError:
             continue
+
+        turn_models: list[str | None] | None = None
+        if turn_models_present:
+            if turn_models_text is None:
+                raise ValueError("invalid turn_models value in archive")
+            try:
+                parsed_turn_models = json.loads(turn_models_text)
+            except json.JSONDecodeError as exc:
+                raise ValueError("invalid turn_models JSON in archive") from exc
+            if not isinstance(parsed_turn_models, list) or any(
+                value is not None and (not isinstance(value, str) or not value.strip())
+                for value in parsed_turn_models
+            ):
+                raise ValueError("invalid turn_models values in archive")
+            turn_models = [value.strip() if isinstance(value, str) else None for value in parsed_turn_models]
 
         headings: list[tuple[int, str, time | None, date]] = []
         previous_time: time | None = None
@@ -349,6 +366,9 @@ def extract_archive(archive_dir: Path, start: datetime, end: datetime, tz: ZoneI
                 previous_time = turn_time
             headings.append((index, match.group(1), turn_time, current_date))
 
+        if turn_models is not None and len(turn_models) != len(headings):
+            raise ValueError("turn_models length mismatch in archive")
+
         for turn_index, (line_index, role, turn_time, turn_date) in enumerate(headings):
             if role != "User":
                 continue
@@ -358,6 +378,7 @@ def extract_archive(archive_dir: Path, start: datetime, end: datetime, tz: ZoneI
             timestamp = local_timestamp.astimezone(timezone.utc)
             if not (start <= timestamp <= end):
                 continue
+            turn_model = turn_models[turn_index] if turn_models is not None else None
             record = _record(
                 source=source,
                 session_id=session_id,
@@ -366,9 +387,15 @@ def extract_archive(archive_dir: Path, start: datetime, end: datetime, tz: ZoneI
                 tz=tz,
                 text=text,
                 provider=None,
-                model=None,
-                attribution="archive_unavailable",
+                model=turn_model,
+                attribution="archive_turn_model" if turn_model else "archive_unavailable",
             )
             if record:
                 output.append(record)
-    return output
+    unique: dict[str, MessageRecord] = {}
+    for record in output:
+        existing = unique.get(record.item_id)
+        if existing is not None and existing != record:
+            raise ValueError("conflicting archive records for duplicate item_id")
+        unique.setdefault(record.item_id, record)
+    return list(unique.values())
