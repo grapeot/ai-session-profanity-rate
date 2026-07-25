@@ -27,7 +27,7 @@ ai-session-profanity-rate prepare \
   --classifier-profile <approved-classifier-profile>
 ```
 
-`--timezone` 必须与生成 archive 的机器时区一致。Markdown contract 只有 session date 和每条消息的本地 `HH:MM`，本工具会按消息顺序处理跨午夜 rollover，但无法恢复逐条模型归因，因此 archive 模式的 model family 记为 `Unknown`。不要把同一批会话的原始 store 和 archive 同时作为输入，否则会重复计数。
+`--timezone` 必须与生成 archive 的机器时区一致。本工具按 session date、每条消息的本地 `HH:MM` 和消息顺序处理跨午夜 rollover。新版 archive 的 `turn_models` 可恢复逐条模型归因；旧 archive 或不提供模型的 source 仍记为 `Unknown`，且不会从 session-level `models_used` 猜测。不要把同一批会话的原始 store 和 archive 同时作为输入，否则会重复计数。
 
 ## CLI
 

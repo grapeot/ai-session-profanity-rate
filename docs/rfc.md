@@ -16,7 +16,7 @@ CLI 不直接调用 provider API，因为 sub-agent runtime、凭证和数据保
 
 ## 时间与模型归属
 
-时间窗是 `[本地日期 N-1 天前 00:00, as-of]`。OpenCode 读取 user message 自带的目标模型。Claude Code 与 Codex 在 user event 没有模型时关联后续第一个 assistant / turn context，并把 attribution 标为 `next_response`。无法确认时保留 `Unknown`，不从 session-level 多模型集合猜测。Antigravity transcript 不提供可靠模型，默认 `Unknown`。
+时间窗是 `[本地日期 N-1 天前 00:00, as-of]`。OpenCode 读取 user message 自带的目标模型。Claude Code 与 Codex 在 user event 没有模型时关联后续第一个 assistant / turn context，并把 attribution 标为 `next_response`。Archive 在存在与 section 一一对齐的 `turn_models` 时使用逐 turn 模型，否则保留 `Unknown`；不从 session-level 多模型集合猜测。Antigravity transcript 不提供可靠模型，默认 `Unknown`。
 
 ## Cache
 

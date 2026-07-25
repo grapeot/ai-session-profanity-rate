@@ -6,6 +6,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+import pytest
+
 from ai_session_profanity_rate.extractors import (
     clean_user_text,
     extract_antigravity,
@@ -157,6 +159,8 @@ reply
 """,
         encoding="utf-8",
     )
+    duplicate = archive.with_name("session-copy.md")
+    duplicate.write_text(archive.read_text(encoding="utf-8"), encoding="utf-8")
 
     records = extract_archive(tmp_path / "archive", START, END, TZ)
 
@@ -165,3 +169,115 @@ reply
     assert all(record.source == "opencode" for record in records)
     assert all(record.model_family == "Unknown" for record in records)
     assert all(record.model_attribution == "archive_unavailable" for record in records)
+
+
+def test_extract_archive_uses_index_aligned_turn_models(tmp_path: Path) -> None:
+    archive = tmp_path / "archive" / "opencode" / "session.md"
+    archive.parent.mkdir(parents=True)
+    archive.write_text(
+        """---
+source: opencode
+session_id: "session-models"
+title: "Synthetic models"
+date: "2026-07-20"
+message_count: 4
+models_used: ["gpt-example", "claude-example"]
+turn_models: ["gpt-example", null, "claude-example", null]
+---
+# Synthetic models
+
+## User [09:00]
+
+first synthetic message
+
+## Assistant [09:01]
+
+reply
+
+## User [09:02]
+
+second synthetic message
+
+## Assistant [09:03]
+
+reply
+""",
+        encoding="utf-8",
+    )
+
+    records = extract_archive(tmp_path / "archive", START, END, TZ)
+
+    assert [record.model for record in records] == ["gpt-example", "claude-example"]
+    assert [record.model_family for record in records] == ["GPT", "Claude"]
+    assert all(record.model_attribution == "archive_turn_model" for record in records)
+
+
+@pytest.mark.parametrize(
+    "turn_models_line",
+    [
+        "turn_models:",
+        "turn_models: not-json",
+        'turn_models: {"model": "gpt-example"}',
+        'turn_models: [""]',
+        'turn_models: ["gpt-example"]',
+    ],
+)
+def test_extract_archive_rejects_invalid_turn_models(tmp_path: Path, turn_models_line: str) -> None:
+    archive = tmp_path / "archive" / "opencode" / "session.md"
+    archive.parent.mkdir(parents=True)
+    archive.write_text(
+        f"""---
+source: opencode
+session_id: "session-invalid-models"
+title: "Synthetic invalid models"
+date: "2026-07-20"
+message_count: 2
+{turn_models_line}
+---
+# Synthetic invalid models
+
+## User [09:00]
+
+synthetic message
+
+## Assistant [09:01]
+
+reply
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="turn_models") as exc_info:
+        extract_archive(tmp_path / "archive", START, END, TZ)
+
+    assert "session-invalid-models" not in str(exc_info.value)
+    assert "session.md" not in str(exc_info.value)
+
+
+def test_extract_archive_rejects_conflicting_duplicate_without_identifier_leak(tmp_path: Path) -> None:
+    archive_dir = tmp_path / "archive" / "opencode"
+    archive_dir.mkdir(parents=True)
+    template = """---
+source: opencode
+session_id: "session-conflict"
+title: "Synthetic conflict"
+date: "2026-07-20"
+message_count: 2
+---
+# Synthetic conflict
+
+## User [09:00]
+
+{message}
+
+## Assistant [09:01]
+
+reply
+"""
+    (archive_dir / "first.md").write_text(template.format(message="first synthetic message"), encoding="utf-8")
+    (archive_dir / "second.md").write_text(template.format(message="different synthetic message"), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="conflicting archive records") as exc_info:
+        extract_archive(tmp_path / "archive", START, END, TZ)
+
+    assert "session-conflict" not in str(exc_info.value)
