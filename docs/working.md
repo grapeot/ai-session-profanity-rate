@@ -2,6 +2,11 @@
 
 ## Changelog
 
+### 2026-08-08
+
+- Added Grok family recognition and chart composition support.
+- Added explicit `--assume-source-model SOURCE=MODEL` attribution for sources such as Antigravity that may omit per-turn model metadata. Assumptions fill only missing values and remain visible in run provenance and record attribution.
+
 ### 2026-07-25
 
 - Deduplicated identical archive messages by stable item ID and reject conflicting duplicates instead of silently double-counting them. Exact message text and boundaries are unchanged, so existing labels remain valid.

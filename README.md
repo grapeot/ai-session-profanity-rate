@@ -54,6 +54,8 @@ ai-session-profanity-rate cache-stats
 
 `prepare` 支持 `--source opencode,claude_code,codex,antigravity,archive`、`--as-of RFC3339`、`--batch-size`、`--batch-max-bytes`、`--classifier-profile`、`--refresh` 和各数据源路径覆盖参数。`archive` 不是默认 source，避免与本机原始 store 重复计数。
 
+当某个 source 不提供逐条模型 metadata，而用户能确认该 source 在分析窗口内只使用一个模型时，可重复传入 `--assume-source-model SOURCE=MODEL`。它只填补缺失值，不覆盖显式模型，并在结果中把 attribution 标为 `configured_source_default`；不要在模型可能混用时启用。
+
 在 OpenCode 中，推荐把 batch 交给显式绑定 `ollama-cloud/glm-5.2` 的 `ollama_glm_5_2` sub-agent。不要用名称相近的 `glm` 代替，因为它可能绑定 Z.ai provider。OpenCode 只在启动时加载 agent 配置，新增 agent 后要重启一次。
 
 每个 request 文件都包含分类 rubric、`batch_id` 和 `{item_id,text}`。sub-agent 必须只返回：

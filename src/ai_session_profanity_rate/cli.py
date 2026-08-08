@@ -9,7 +9,15 @@ from zoneinfo import ZoneInfo
 
 from .cache import LabelCache
 from .chart import render_chart
-from .extractors import extract_antigravity, extract_archive, extract_claude, extract_codex, extract_opencode, parse_timestamp
+from .extractors import (
+    apply_source_model_assumptions,
+    extract_antigravity,
+    extract_archive,
+    extract_claude,
+    extract_codex,
+    extract_opencode,
+    parse_timestamp,
+)
 from .pipeline import ingest_run, prepare_run
 
 
@@ -33,6 +41,20 @@ def parse_as_of(value: str | None) -> datetime:
     return parsed
 
 
+def parse_model_assumptions(values: list[str]) -> dict[str, str]:
+    assumptions: dict[str, str] = {}
+    for value in values:
+        source, separator, model = value.partition("=")
+        source = source.strip()
+        model = model.strip()
+        if not separator or not source or not model:
+            raise ValueError("--assume-source-model must use SOURCE=MODEL")
+        if source in assumptions and assumptions[source] != model:
+            raise ValueError(f"conflicting model assumptions for source: {source}")
+        assumptions[source] = model
+    return assumptions
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="ai-session-profanity-rate")
     parser.add_argument("--home", type=Path, default=default_home())
@@ -53,6 +75,13 @@ def build_parser() -> argparse.ArgumentParser:
     prepare.add_argument("--codex-dir", type=Path, action="append")
     prepare.add_argument("--antigravity-dir", type=Path, default=Path.home() / ".gemini" / "antigravity-ide" / "brain")
     prepare.add_argument("--archive-dir", type=Path, default=Path.home() / ".local" / "share" / "ai-session-export")
+    prepare.add_argument(
+        "--assume-source-model",
+        action="append",
+        default=[],
+        metavar="SOURCE=MODEL",
+        help="fill missing model metadata for a source using an explicit user-confirmed assumption",
+    )
 
     ingest = subparsers.add_parser("ingest", help="validate labels, update cache, and emit JSON")
     ingest.add_argument("--run-dir", type=Path, required=True)
@@ -102,6 +131,8 @@ def command_prepare(args: argparse.Namespace, cache: LabelCache) -> int:
     unknown = sources - {"opencode", "claude_code", "codex", "antigravity", "archive"}
     if unknown:
         raise ValueError(f"unsupported sources: {', '.join(sorted(unknown))}")
+    model_assumptions = parse_model_assumptions(args.assume_source_model)
+    records = apply_source_model_assumptions(records, model_assumptions)
 
     run_dir = args.output
     if run_dir is None:
@@ -125,6 +156,7 @@ def command_prepare(args: argparse.Namespace, cache: LabelCache) -> int:
             "sources": sorted(sources),
             "source_counts": source_counts,
             "source_status": source_status,
+            "model_assumptions": model_assumptions,
         },
     )
     display_run_dir = str(run_dir).replace(str(Path.home()), "~", 1)
