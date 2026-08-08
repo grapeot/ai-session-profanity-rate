@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
+from dataclasses import replace
 from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable
@@ -36,6 +37,8 @@ def model_family(provider: str | None, model: str | None) -> str:
         return "Gemini"
     if "deepseek" in model_lower or "deepseek" in provider_lower or provider_lower == "ds4":
         return "DeepSeek"
+    if "grok" in model_lower or provider_lower in {"xai", "x.ai"}:
+        return "Grok"
     if model_lower.startswith(("glm", "zai-")) or "zai" in provider_lower:
         return "GLM"
     if model_lower.startswith(("gpt", "o1", "o3", "o4")) or provider_lower == "openai":
@@ -43,6 +46,26 @@ def model_family(provider: str | None, model: str | None) -> str:
     if not model_lower:
         return "Unknown"
     return "Other"
+
+
+def apply_source_model_assumptions(
+    records: list[MessageRecord], assumptions: dict[str, str]
+) -> list[MessageRecord]:
+    output: list[MessageRecord] = []
+    for record in records:
+        assumed_model = assumptions.get(record.source)
+        if record.model is None and assumed_model:
+            output.append(
+                replace(
+                    record,
+                    model=assumed_model,
+                    model_family=model_family(None, assumed_model),
+                    model_attribution="configured_source_default",
+                )
+            )
+        else:
+            output.append(record)
+    return output
 
 
 def clean_user_text(text: str) -> str:

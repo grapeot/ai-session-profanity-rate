@@ -4,7 +4,7 @@ import json
 import stat
 from pathlib import Path
 
-from ai_session_profanity_rate.chart import render_chart
+from ai_session_profanity_rate.chart import MODEL_FAMILIES, render_chart
 from ai_session_profanity_rate.cli import main
 
 
@@ -15,7 +15,7 @@ def test_render_chart(tmp_path: Path) -> None:
             {
                 "records": [
                     {"local_date": "2026-07-20", "profanity_count": 2, "model_family": "GPT"},
-                    {"local_date": "2026-07-20", "profanity_count": 0, "model_family": "Claude"},
+                    {"local_date": "2026-07-20", "profanity_count": 1, "model_family": "Grok"},
                 ]
             }
         )
@@ -23,6 +23,7 @@ def test_render_chart(tmp_path: Path) -> None:
     output = render_chart(input_path, tmp_path / "chart.png")
     assert output.stat().st_size > 1000
     assert stat.S_IMODE(output.stat().st_mode) == 0o600
+    assert "Grok" in MODEL_FAMILIES
 
 
 def test_visualize_does_not_create_cache(tmp_path: Path) -> None:

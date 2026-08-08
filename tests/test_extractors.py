@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from ai_session_profanity_rate.extractors import (
+    apply_source_model_assumptions,
     clean_user_text,
     extract_antigravity,
     extract_archive,
@@ -32,6 +33,8 @@ def test_model_family() -> None:
     assert model_family("openai", "gpt-example") == "GPT"
     assert model_family("anthropic", "claude-example") == "Claude"
     assert model_family("zai-coding-plan", "glm-example") == "GLM"
+    assert model_family("xai", "grok-4.5") == "Grok"
+    assert model_family(None, "xai/grok-4.5") == "Grok"
     assert model_family(None, None) == "Unknown"
 
 
@@ -125,6 +128,76 @@ def test_extract_antigravity_keeps_explicit_request_only(tmp_path: Path) -> None
     assert len(records) == 1
     assert records[0].text == "synthetic"
     assert records[0].model_family == "Unknown"
+
+
+def test_source_model_assumption_attributes_unknown_antigravity_to_gemini(tmp_path: Path) -> None:
+    transcript = tmp_path / "brain" / "s1" / ".system_generated" / "logs" / "transcript_full.jsonl"
+    write_jsonl(
+        transcript,
+        [
+            {
+                "type": "USER_INPUT",
+                "source": "USER_EXPLICIT",
+                "created_at": "2026-07-20T12:00:00Z",
+                "content": "<USER_REQUEST>synthetic</USER_REQUEST>",
+            }
+        ],
+    )
+
+    records = apply_source_model_assumptions(
+        extract_antigravity(tmp_path / "brain", START, END, TZ),
+        {"antigravity": "gemini"},
+    )
+
+    assert records[0].model == "gemini"
+    assert records[0].model_family == "Gemini"
+    assert records[0].model_attribution == "configured_source_default"
+
+
+def test_source_model_assumption_fills_archive_gap_without_overwriting_turn_model(tmp_path: Path) -> None:
+    archive = tmp_path / "archive" / "antigravity" / "session.md"
+    archive.parent.mkdir(parents=True)
+    archive.write_text(
+        """---
+source: antigravity
+session_id: "session-model-assumption"
+title: "Synthetic model assumption"
+date: "2026-07-20"
+message_count: 4
+turn_models: [null, null, "grok-4.5", null]
+---
+# Synthetic model assumption
+
+## User [09:00]
+
+first synthetic message
+
+## Assistant [09:01]
+
+reply
+
+## User [09:02]
+
+second synthetic message
+
+## Assistant [09:03]
+
+reply
+""",
+        encoding="utf-8",
+    )
+
+    records = apply_source_model_assumptions(
+        extract_archive(tmp_path / "archive", START, END, TZ),
+        {"antigravity": "gemini"},
+    )
+
+    assert [record.model for record in records] == ["gemini", "grok-4.5"]
+    assert [record.model_family for record in records] == ["Gemini", "Grok"]
+    assert [record.model_attribution for record in records] == [
+        "configured_source_default",
+        "archive_turn_model",
+    ]
 
 
 def test_extract_ai_session_export_archive_and_midnight_rollover(tmp_path: Path) -> None:

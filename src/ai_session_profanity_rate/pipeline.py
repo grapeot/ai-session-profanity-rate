@@ -272,6 +272,7 @@ def ingest_run(run_dir: Path, cache: LabelCache) -> dict[str, Any]:
                 "sources",
                 "source_counts",
                 "source_status",
+                "model_assumptions",
             )
             if key in manifest
         },

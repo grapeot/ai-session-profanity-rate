@@ -6,6 +6,8 @@ from collections import Counter, defaultdict
 from datetime import date, timedelta
 from pathlib import Path
 
+MODEL_FAMILIES = ["GPT", "Claude", "Gemini", "Grok", "GLM", "DeepSeek", "Other", "Unknown"]
+
 
 def render_chart(input_path: Path, output_path: Path) -> Path:
     import matplotlib
@@ -26,7 +28,6 @@ def render_chart(input_path: Path, output_path: Path) -> Path:
             cursor += timedelta(days=1)
     else:
         dates = sorted({record["local_date"] for record in records})
-    families = ["GPT", "Claude", "Gemini", "GLM", "DeepSeek", "Other", "Unknown"]
     totals = Counter(record["local_date"] for record in records)
     positives = Counter(record["local_date"] for record in records if record["profanity_count"] > 0)
     composition: dict[str, Counter[str]] = defaultdict(Counter)
@@ -56,13 +57,14 @@ def render_chart(input_path: Path, output_path: Path) -> Path:
         "GPT": "#3A7D6B",
         "Claude": "#C76D3B",
         "Gemini": "#00A6A6",
+        "Grok": "#D1495B",
         "GLM": "#7A5AF8",
         "DeepSeek": "#277DA1",
         "Other": "#8D99AE",
         "Unknown": "#C7C7C7",
     }
     bottoms = [0] * len(dates)
-    for family in families:
+    for family in MODEL_FAMILIES:
         values = [composition[date][family] for date in dates]
         if not any(values):
             continue
@@ -72,7 +74,10 @@ def render_chart(input_path: Path, output_path: Path) -> Path:
     composition_ax.set_title("Composition of profanity units by target model family (absolute counts, not model rates)")
     composition_ax.grid(axis="y", alpha=0.2)
     if any(bottoms):
-        composition_ax.legend(ncol=len([value for value in families if any(composition[date][value] for date in dates)]), frameon=False)
+        composition_ax.legend(
+            ncol=len([value for value in MODEL_FAMILIES if any(composition[date][value] for date in dates)]),
+            frameon=False,
+        )
         composition_ax.set_ylim(0, max(bottoms) * 1.12 + 0.5)
     composition_ax.tick_params(axis="x", rotation=45, labelsize=8)
     fig.text(

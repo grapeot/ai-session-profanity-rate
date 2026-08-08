@@ -24,6 +24,8 @@ This skill counts independent profanity units; it does not measure general insul
 
 Run `prepare` for the requested window. It prints a run directory and creates `requests/batch-*.json` only for cache misses. Do not print or summarize request text in chat.
 
+If a source lacks per-turn model metadata and the user explicitly confirms that it used one model throughout the window, pass `--assume-source-model SOURCE=MODEL`. This only fills missing values and records `configured_source_default` attribution; never infer or silently apply an assumption.
+
 Prefer native stores when available because they preserve exact timestamps and stronger per-message model attribution. For portability, first run AI Session Export and then select only the archive input:
 
 ```bash
