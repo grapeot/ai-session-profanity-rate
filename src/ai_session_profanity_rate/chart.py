@@ -6,7 +6,7 @@ from collections import Counter, defaultdict
 from datetime import date, timedelta
 from pathlib import Path
 
-MODEL_FAMILIES = ["GPT", "Claude", "Gemini", "Grok", "GLM", "DeepSeek", "Other", "Unknown"]
+MODEL_FAMILIES = ["GPT", "Claude", "Gemini", "Grok", "Qwen", "GLM", "DeepSeek", "Other", "Unknown"]
 
 
 def render_chart(input_path: Path, output_path: Path) -> Path:
@@ -58,6 +58,7 @@ def render_chart(input_path: Path, output_path: Path) -> Path:
         "Claude": "#C76D3B",
         "Gemini": "#00A6A6",
         "Grok": "#D1495B",
+        "Qwen": "#B58900",
         "GLM": "#7A5AF8",
         "DeepSeek": "#277DA1",
         "Other": "#8D99AE",
