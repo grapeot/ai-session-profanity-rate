@@ -35,6 +35,8 @@ def test_model_family() -> None:
     assert model_family("zai-coding-plan", "glm-example") == "GLM"
     assert model_family("xai", "grok-4.5") == "Grok"
     assert model_family(None, "xai/grok-4.5") == "Grok"
+    assert model_family(None, "qwen3.8-27b") == "Qwen"
+    assert model_family("qwen", None) == "Qwen"
     assert model_family(None, None) == "Unknown"
 
 

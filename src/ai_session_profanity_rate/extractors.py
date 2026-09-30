@@ -39,6 +39,8 @@ def model_family(provider: str | None, model: str | None) -> str:
         return "DeepSeek"
     if "grok" in model_lower or provider_lower in {"xai", "x.ai"}:
         return "Grok"
+    if "qwen" in model_lower or "qwen" in provider_lower:
+        return "Qwen"
     if model_lower.startswith(("glm", "zai-")) or "zai" in provider_lower:
         return "GLM"
     if model_lower.startswith(("gpt", "o1", "o3", "o4")) or provider_lower == "openai":

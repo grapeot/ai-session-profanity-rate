@@ -2,6 +2,10 @@
 
 ## Changelog
 
+### 2026-09-30
+
+- Added a `Qwen` model-family bucket (matched by model or provider name) so local Qwen messages no longer fall into `Other`; the chart gains a dedicated Qwen color and legend entry.
+
 ### 2026-08-08
 
 - Added Grok family recognition and chart composition support.
