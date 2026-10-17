@@ -34,13 +34,13 @@ ai-session-profanity-rate prepare \
 ```bash
 # 默认最近 7 个本地日历日；输出到 repo 外的 XDG data 目录
 ai-session-profanity-rate prepare \
-  --classifier-profile ollama-cloud-glm-5.2-profanity-v3
+  --classifier-profile ollama-cloud-glm-5.3-flash-profanity-v1
 
 # 最近 30 天，固定时区；命令会打印 run 目录和待标注 batch 数
 ai-session-profanity-rate prepare \
   --days 30 \
   --timezone America/Los_Angeles \
-  --classifier-profile ollama-cloud-glm-5.2-profanity-v2
+  --classifier-profile ollama-cloud-glm-5.3-flash-profanity-v1
 
 # sub-agent 把响应写到 <run>/labels/ 后，严格校验并生成 results.json
 ai-session-profanity-rate ingest --run-dir <run-directory>
@@ -56,7 +56,7 @@ ai-session-profanity-rate cache-stats
 
 当某个 source 不提供逐条模型 metadata，而用户能确认该 source 在分析窗口内只使用一个模型时，可重复传入 `--assume-source-model SOURCE=MODEL`。它只填补缺失值，不覆盖显式模型，并在结果中把 attribution 标为 `configured_source_default`；不要在模型可能混用时启用。
 
-在 OpenCode 中，推荐把 batch 交给显式绑定 `ollama-cloud/glm-5.2` 的 `ollama_glm_5_2` sub-agent。不要用名称相近的 `glm` 代替，因为它可能绑定 Z.ai provider。OpenCode 只在启动时加载 agent 配置，新增 agent 后要重启一次。
+在 OpenCode 中，把 batch 交给 `ollama_glm_5_3_flash` sub-agent（必须解析为 `ollama-cloud/glm-5.3-flash`；派发前核对 agent 配置并从运行日志确认实际解析的模型，不要把已下线的 route 名称按语义映射到别的 agent。本 pipeline 不再使用 GPT Astra，`reasoning_gpt` 已于 2026-10-17 因成本退役）。OpenCode 只在启动时加载 agent 配置，新增 agent 后要重启一次。
 
 每个 request 文件都包含分类 rubric、`batch_id` 和 `{item_id,text}`。sub-agent 必须只返回：
 
