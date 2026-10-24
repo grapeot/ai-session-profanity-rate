@@ -2,6 +2,17 @@
 
 ## Changelog
 
+### 2026-10-24
+
+- Added opt-in `--skip-oversized-items` for `prepare` and the matching `skip_oversized` knob in `prepare_run`. The 2026-10-24 weekly window contains a single ~2.1 MB pasted user message that cannot fit any reasonable batch; the previous hard failure is still the default, and the flag records each excluded key (item id, HMAC cache key, byte size, no text) in the manifest, excludes those rows from `results.json` records and summary denominators, and discloses them per row (including rows that share the skipped cache key) in `results.json` under `excluded.oversized`, plus `excluded_oversized_message_count` in `summary.json`.
+- `ingest` independently re-validates every `oversized_skipped` manifest entry against the private manifest (row identity, exact serialized byte size, uncached state) and against the persisted `batch_max_bytes` cap, so a short message can never be silently excluded, and a request file containing an excluded item is rejected. `results.json` provenance records `batch_max_bytes` for reconciliation.
+
+### 2026-10-17
+
+- Migrated the classifier route to the registered `ollama_glm_5_3_flash` sub-agent (must resolve to `ollama-cloud/glm-5.3-flash`) with a new `ollama-cloud-glm-5.3-flash-profanity-v1` profile. The former `reasoning_gpt` route was retired: its documented low-effort Astra binding no longer matched the live agent registry, and a weekly fan-out read the full window twice through a high-cost model. README, root skill, the weekly job prompt, and the parallel-subagent routing doc now state the same route, require verifying the binding plus the resolved model from runtime logs before dispatch, and forbid remapping retired route names by intuition.
+- Delegation now gates on a volume statement (manifest `classification_count` and total request bytes) before parallel fan-out, because a rolling window plus a profile change re-labels the uncached portion of the entire window.
+- Documented the long-line truncation workaround for worker runtimes: classification reads losslessly wrapped, roundtrip-verified per-item views of the request items stored under the run directory, keeping the strict request/manifest files untouched as the validation source of truth.
+
 ### 2026-09-30
 
 - Added a `Qwen` model-family bucket (matched by model or provider name) so local Qwen messages no longer fall into `Other`; the chart gains a dedicated Qwen color and legend entry.
@@ -10,6 +21,14 @@
 
 - Added Grok family recognition and chart composition support.
 - Added explicit `--assume-source-model SOURCE=MODEL` attribution for sources such as Antigravity that may omit per-turn model metadata. Assumptions fill only missing values and remain visible in run provenance and record attribution.
+
+### 2026-08-29
+
+- Archive extraction now ignores delimiter-shaped turn headings inside fenced code blocks, preventing pasted transcript examples from breaking index-aligned `turn_models` validation or splitting messages.
+
+### 2026-08-01
+
+- Archive deduplication now prefers explicit per-turn model attribution when an otherwise identical legacy archive copy lacks it, while still rejecting conflicting message data or contradictory explicit models.
 
 ### 2026-07-25
 
@@ -39,3 +58,4 @@
 - Session-level `models_used` 不能可靠归因到单条 user message；优先读取原始 message model，缺失时记录 attribution，不能猜。
 - 原始 store 仍是精确时间与逐消息模型归因的首选。Markdown archive 可作为 portable input，但调用者必须提供导出机器的时区；跨午夜按 turn 顺序推断，模型归因只接受 index-aligned `turn_models`，缺失时保持 `Unknown`。
 - 单纯 bitstring 会在漏项或重排时静默错位；response 必须带 `item_id` 并做集合全等校验。
+- Route 名称必须逐字核对 agent 注册表后才派发：被改名或下线的 agent 会被语义猜测映射到错误甚至高成本的模型；派发前先用 manifest 的 classification_count 与 total request bytes 做成本 sizing，窗口滚动或 profile 变更都会把未命中的全文重新送标。

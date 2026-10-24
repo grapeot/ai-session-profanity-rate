@@ -68,6 +68,11 @@ def build_parser() -> argparse.ArgumentParser:
     prepare.add_argument("--output", type=Path)
     prepare.add_argument("--batch-size", type=int, default=100)
     prepare.add_argument("--batch-max-bytes", type=int, default=80_000)
+    prepare.add_argument(
+        "--skip-oversized-items",
+        action="store_true",
+        help="exclude items larger than batch-max-bytes from batches instead of failing; recorded in manifest and results",
+    )
     prepare.add_argument("--classifier-profile", required=True)
     prepare.add_argument("--refresh", action="store_true")
     prepare.add_argument("--opencode-db", type=Path, default=Path.home() / ".local" / "share" / "opencode" / "opencode.db")
@@ -146,6 +151,7 @@ def command_prepare(args: argparse.Namespace, cache: LabelCache) -> int:
         batch_size=args.batch_size,
         batch_max_bytes=args.batch_max_bytes,
         refresh=args.refresh,
+        skip_oversized=args.skip_oversized_items,
         metadata={
             "days": args.days,
             "timezone": args.timezone,
@@ -168,6 +174,7 @@ def command_prepare(args: argparse.Namespace, cache: LabelCache) -> int:
                 "cache_hit_count": manifest["cache_hit_count"],
                 "classification_count": manifest["classification_count"],
                 "batch_count": manifest["batch_count"],
+                "oversized_skipped_count": manifest["oversized_skipped_count"],
                 "source_status": manifest["source_status"],
             },
             indent=2,
@@ -201,6 +208,7 @@ def main(argv: list[str] | None = None) -> int:
                         "profanity_count": summary["profanity_count"],
                         "message_rate": summary["message_rate"],
                         "profanity_per_100_messages": summary["profanity_per_100_messages"],
+                        "excluded_oversized_message_count": summary["excluded_oversized_message_count"],
                     },
                     indent=2,
                 )
