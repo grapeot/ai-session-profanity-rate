@@ -52,7 +52,7 @@ ai-session-profanity-rate visualize --input <run-directory>/results.json
 ai-session-profanity-rate cache-stats
 ```
 
-`prepare` 支持 `--source opencode,claude_code,codex,antigravity,archive`、`--as-of RFC3339`、`--batch-size`、`--batch-max-bytes`、`--classifier-profile`、`--refresh` 和各数据源路径覆盖参数。`archive` 不是默认 source，避免与本机原始 store 重复计数。
+`prepare` 支持 `--source opencode,claude_code,codex,antigravity,archive`、`--as-of RFC3339`、`--batch-size`、`--batch-max-bytes`、`--classifier-profile`、`--refresh`、`--skip-oversized-items`（把超出 batch 上限的消息排除出批次并在 manifest 与 results 里留痕，默认仍然直接失败）和各数据源路径覆盖参数。`archive` 不是默认 source，避免与本机原始 store 重复计数。
 
 当某个 source 不提供逐条模型 metadata，而用户能确认该 source 在分析窗口内只使用一个模型时，可重复传入 `--assume-source-model SOURCE=MODEL`。它只填补缺失值，不覆盖显式模型，并在结果中把 attribution 标为 `configured_source_default`；不要在模型可能混用时启用。
 
@@ -69,11 +69,11 @@ ai-session-profanity-rate cache-stats
 }
 ```
 
-`ingest` 要求 item 集合完全相等，不接受漏项、重复项、额外项、负数或非整数 count。只有完整合法的 batch 才会原子写入 cache。
+`ingest` 要求 item 集合完全相等，不接受漏项、重复项、额外项、负数或非整数 count。只有完整合法的 batch 才会原子写入 cache。`prepare --skip-oversized-items` 时，被排除的超限 item 出现在任何 request 中都会让 `ingest` 直接失败；manifest 里的排除记录会与实际文本体积、batch 上限复核，防止把普通消息悄悄排除。
 
 ## 输出
 
-`results.json` 不含原文，只保留 timestamp、source、session/message ID、model、model family、`profanity_count`、`has_profanity` 和 cache 状态。`summary.json` 同时给出含粗口消息占比、每 100 条消息的粗口词元数，以及按日期、模型 family 的分组。图表上半部分显示每日含粗口消息率，下半部分显示每日粗口词元的模型构成。
+`results.json` 不含原文，只保留 timestamp、source、session/message ID、model、model family、`profanity_count`、`has_profanity`、cache 状态。使用 `--skip-oversized-items` 时，被排除的消息不出现在 records 和 summary 分母里，而是按行留痕在 `results.json` 的 `excluded.oversized`（item ID、日期、source、model、字节体积），summary.json 增加 `excluded_oversized_message_count`。`summary.json` 同时给出含粗口消息占比、每 100 条消息的粗口词元数，以及按日期、模型 family 的分组。图表上半部分显示每日含粗口消息率，下半部分显示每日粗口词元的模型构成。
 
 分类结果描述相关性，不代表模型导致用户说粗口。任务难度、使用量和模型选择都会造成 selection bias。
 

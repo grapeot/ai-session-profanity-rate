@@ -44,6 +44,7 @@ def prepare_run(
     batch_max_bytes: int,
     refresh: bool,
     metadata: dict[str, Any],
+    skip_oversized: bool = False,
 ) -> dict[str, Any]:
     if run_dir.exists() and any(run_dir.iterdir()):
         raise FileExistsError(f"run directory is not empty: {run_dir}")
@@ -78,10 +79,14 @@ def prepare_run(
     current: list[dict[str, Any]] = []
     current_bytes = 0
     request_overhead = len(RUBRIC.encode("utf-8")) + 2_000
+    skipped_oversized: list[dict[str, Any]] = []
     for item in misses_by_key.values():
         item_bytes = len(json.dumps({"item_id": item["item_id"], "text": item["text"]}, ensure_ascii=False).encode("utf-8"))
         if item_bytes + request_overhead > batch_max_bytes:
-            raise ValueError(f"item exceeds batch-max-bytes: {item['item_id']}")
+            if not skip_oversized:
+                raise ValueError(f"item exceeds batch-max-bytes: {item['item_id']}")
+            skipped_oversized.append({"item_id": item["item_id"], "cache_key": item["cache_key"], "bytes": item_bytes})
+            continue
         if current and (len(current) >= batch_size or current_bytes + item_bytes + request_overhead > batch_max_bytes):
             batches.append(current)
             current = []
@@ -123,8 +128,12 @@ def prepare_run(
         "message_count": len(private_rows),
         "cache_hit_count": cache_hits,
         "message_cache_miss_count": message_cache_miss_count,
-        "classification_count": len(misses_by_key),
+        "classification_count": len(misses_by_key) - len(skipped_oversized),
         "batch_count": len(batches),
+        "batch_max_bytes": batch_max_bytes,
+        "skip_oversized": skip_oversized,
+        "oversized_skipped_count": len(skipped_oversized),
+        "oversized_skipped": skipped_oversized,
         **metadata,
     }
     secure_write(run_dir / "manifest.json", json.dumps(manifest, indent=2) + "\n")
@@ -202,7 +211,28 @@ def ingest_run(run_dir: Path, cache: LabelCache) -> dict[str, Any]:
     cache_hits_by_key: dict[str, bool] = {}
     cache_updates: list[tuple[str, int, str]] = []
     private_by_id = {row["item_id"]: row for row in private_rows}
-    expected_miss_keys = {row["cache_key"] for row in private_rows if row.get("cached_profanity_count") is None}
+    miss_keys = {row["cache_key"] for row in private_rows if row.get("cached_profanity_count") is None}
+    skipped_entries = manifest.get("oversized_skipped", [])
+    skipped_keys = {entry["cache_key"] for entry in skipped_entries}
+    if len(skipped_keys) != len(skipped_entries):
+        raise ValueError("duplicate oversized_skipped cache_key in manifest")
+    batch_max_bytes = manifest.get("batch_max_bytes")
+    request_overhead = len(RUBRIC.encode("utf-8")) + 2_000
+
+    def item_size(item_id: str, text: str) -> int:
+        return len(json.dumps({"item_id": item_id, "text": text}, ensure_ascii=False).encode("utf-8"))
+
+    for entry in skipped_entries:
+        row = private_by_id.get(entry["item_id"])
+        if row is None or row["cache_key"] != entry["cache_key"]:
+            raise ValueError(f"oversized_skipped entry does not match private manifest: {entry['item_id']}")
+        if entry["cache_key"] not in miss_keys:
+            raise ValueError(f"oversized_skipped cache_key is not an uncached item in this run: {entry['item_id']}")
+        if type(entry["bytes"]) is not int or entry["bytes"] != item_size(row["item_id"], row["text"]):
+            raise ValueError(f"oversized_skipped bytes do not match private manifest: {entry['item_id']}")
+        if type(batch_max_bytes) is not int or entry["bytes"] + request_overhead <= batch_max_bytes:
+            raise ValueError(f"oversized_skipped item is not oversized for this run's cap: {entry['item_id']}")
+    expected_miss_keys = miss_keys - skipped_keys
     expected_representative_ids: dict[str, str] = {}
     for row in private_rows:
         if row["cache_key"] in expected_miss_keys:
@@ -228,6 +258,8 @@ def ingest_run(run_dir: Path, cache: LabelCache) -> dict[str, Any]:
             if row is None or row.get("text") != item.get("text"):
                 raise ValueError(f"request item does not match private manifest: {item_id}")
             cache_key = row["cache_key"]
+            if cache_key in skipped_keys:
+                raise ValueError(f"request contains oversized-excluded item: {item_id}")
             if expected_representative_ids.get(cache_key) != item_id or cache_key in seen_request_keys:
                 raise ValueError(f"request item is stale or duplicated: {item_id}")
             seen_request_keys.add(cache_key)
@@ -240,6 +272,8 @@ def ingest_run(run_dir: Path, cache: LabelCache) -> dict[str, Any]:
     if seen_request_keys != expected_miss_keys:
         raise ValueError("request cache-key set does not match private manifest")
     for row in private_rows:
+        if row["cache_key"] in skipped_keys:
+            continue
         if row["cache_key"] not in counts_by_key:
             raise ValueError(f"unresolved item_id: {row['item_id']}")
     for cache_key in expected_miss_keys:
@@ -248,18 +282,34 @@ def ingest_run(run_dir: Path, cache: LabelCache) -> dict[str, Any]:
 
     public_records: list[dict[str, Any]] = []
     for row in private_rows:
+        if row["cache_key"] in skipped_keys:
+            continue
         public = {key: value for key, value in row.items() if key not in {"text", "cache_key", "cached_profanity_count"}}
         cache_key = row["cache_key"]
         public["profanity_count"] = counts_by_key[cache_key]
         public["has_profanity"] = counts_by_key[cache_key] > 0
         public["cache_hit"] = cache_hits_by_key[cache_key]
         public_records.append(public)
+    excluded_rows = [
+        {
+            "item_id": row["item_id"],
+            "local_date": row["local_date"],
+            "source": row["source"],
+            "model": row["model"],
+            "model_family": row["model_family"],
+            "bytes": item_size(row["item_id"], row["text"]),
+        }
+        for row in private_rows
+        if row["cache_key"] in skipped_keys
+    ]
     summary = summarize(public_records)
+    summary["excluded_oversized_message_count"] = len(excluded_rows)
     results = {
         "schema_version": "results.v1",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "definition_version": DEFINITION_VERSION,
         "classifier_profile": profile,
+        "excluded": {"oversized": excluded_rows},
         "provenance": {
             key: manifest.get(key)
             for key in (
@@ -273,6 +323,7 @@ def ingest_run(run_dir: Path, cache: LabelCache) -> dict[str, Any]:
                 "source_counts",
                 "source_status",
                 "model_assumptions",
+                "batch_max_bytes",
             )
             if key in manifest
         },

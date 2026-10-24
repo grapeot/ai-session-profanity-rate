@@ -2,6 +2,11 @@
 
 ## Changelog
 
+### 2026-10-24
+
+- Added opt-in `--skip-oversized-items` for `prepare` and the matching `skip_oversized` knob in `prepare_run`. The 2026-10-24 weekly window contains a single ~2.1 MB pasted user message that cannot fit any reasonable batch; the previous hard failure is still the default, and the flag records each excluded key (item id, HMAC cache key, byte size, no text) in the manifest, excludes those rows from `results.json` records and summary denominators, and discloses them per row (including rows that share the skipped cache key) in `results.json` under `excluded.oversized`, plus `excluded_oversized_message_count` in `summary.json`.
+- `ingest` independently re-validates every `oversized_skipped` manifest entry against the private manifest (row identity, exact serialized byte size, uncached state) and against the persisted `batch_max_bytes` cap, so a short message can never be silently excluded, and a request file containing an excluded item is rejected. `results.json` provenance records `batch_max_bytes` for reconciliation.
+
 ### 2026-10-17
 
 - Migrated the classifier route to the registered `ollama_glm_5_3_flash` sub-agent (must resolve to `ollama-cloud/glm-5.3-flash`) with a new `ollama-cloud-glm-5.3-flash-profanity-v1` profile. The former `reasoning_gpt` route was retired: its documented low-effort Astra binding no longer matched the live agent registry, and a weekly fan-out read the full window twice through a high-cost model. README, root skill, the weekly job prompt, and the parallel-subagent routing doc now state the same route, require verifying the binding plus the resolved model from runtime logs before dispatch, and forbid remapping retired route names by intuition.
